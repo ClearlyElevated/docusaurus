@@ -11,6 +11,7 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import useBaseUrl from '@docusaurus/useBaseUrl';
 import type {Props} from '@theme/Layout';
 import SearchMetadatas from '@theme/SearchMetadatas';
+import Seo from '@theme/Seo';
 import {
   DEFAULT_SEARCH_TAG,
   useTitleFormatter,
@@ -82,47 +83,35 @@ function CanonicalUrlHeaders({permalink}: {permalink?: string}) {
 
 export default function LayoutHead(props: Props): JSX.Element {
   const {
-    siteConfig,
-    i18n: {currentLocale},
+    siteConfig: {
+      favicon,
+      themeConfig: {metadatas, image: defaultImage},
+    },
+    i18n: {currentLocale, localeConfigs},
   } = useDocusaurusContext();
-  const {
-    favicon,
-    themeConfig: {image: defaultImage, metadatas},
-  } = siteConfig;
   const {title, description, image, keywords, searchMetadatas} = props;
-  const metaTitle = useTitleFormatter(title);
-  const metaImage = image || defaultImage;
-  const metaImageUrl = useBaseUrl(metaImage, {absolute: true});
   const faviconUrl = useBaseUrl(favicon);
+  const pageTitle = useTitleFormatter(title);
 
   // See https://github.com/facebook/docusaurus/issues/3317#issuecomment-754661855
   // const htmlLang = currentLocale.split('-')[0];
   const htmlLang = currentLocale; // should we allow the user to override htmlLang with localeConfig?
+  const htmlDir = localeConfigs[currentLocale].direction;
 
   return (
     <>
       <Head>
-        <html lang={htmlLang} />
-        {metaTitle && <title>{metaTitle}</title>}
-        {metaTitle && <meta property="og:title" content={metaTitle} />}
+        <html lang={htmlLang} dir={htmlDir} />
         {favicon && <link rel="shortcut icon" href={faviconUrl} />}
-        {description && <meta name="description" content={description} />}
-        {description && (
-          <meta property="og:description" content={description} />
-        )}
-        {keywords && keywords.length && (
-          <meta
-            name="keywords"
-            content={Array.isArray(keywords) ? keywords.join(',') : keywords}
-          />
-        )}
-        {metaImage && <meta property="og:image" content={metaImageUrl} />}
-        {metaImage && <meta name="twitter:image" content={metaImageUrl} />}
-        {metaImage && (
-          <meta name="twitter:image:alt" content={`Image for ${metaTitle}`} />
-        )}
-        <meta name="twitter:card" content="summary_large_image" />
+        <title>{pageTitle}</title>
+        <meta property="og:title" content={pageTitle} />
+        {image ||
+          (defaultImage && (
+            <meta name="twitter:card" content="summary_large_image" />
+          ))}
       </Head>
+
+      <Seo {...{description, keywords, image}} />
 
       <CanonicalUrlHeaders />
 

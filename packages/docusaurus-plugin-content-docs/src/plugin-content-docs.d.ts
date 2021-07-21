@@ -8,21 +8,19 @@
 /* eslint-disable camelcase */
 
 declare module '@docusaurus/plugin-content-docs-types' {
-  export type PermalinkToSidebar = {
-    [permalink: string]: string;
-  };
+  type VersionBanner = import('./types').VersionBanner;
 
   export type PropVersionMetadata = {
     pluginId: string;
     version: string;
     label: string;
+    banner: VersionBanner;
     isLast: boolean;
     docsSidebars: PropSidebars;
-    permalinkToSidebar: PermalinkToSidebar;
   };
 
   type PropsSidebarItemBase = {
-    customProps?: object;
+    customProps?: Record<string, unknown>;
   };
 
   export type PropSidebarItemLink = PropsSidebarItemBase & {
@@ -43,6 +41,11 @@ declare module '@docusaurus/plugin-content-docs-types' {
   export type PropSidebars = {
     [sidebarId: string]: PropSidebarItem[];
   };
+
+  export type {
+    GlobalVersion as GlobalDataVersion,
+    GlobalDoc as GlobalDataDoc,
+  } from './types';
 }
 
 declare module '@theme/DocItem' {
@@ -52,6 +55,7 @@ declare module '@theme/DocItem' {
     readonly component: () => JSX.Element;
     readonly exact: boolean;
     readonly path: string;
+    readonly sidebar?: string;
   };
 
   export type FrontMatter = {
@@ -69,6 +73,7 @@ declare module '@theme/DocItem' {
     readonly permalink?: string;
     readonly editUrl?: string;
     readonly lastUpdatedAt?: number;
+    readonly formattedLastUpdatedAt?: string;
     readonly lastUpdatedBy?: string;
     readonly version?: string;
     readonly previous?: {readonly permalink: string; readonly title: string};
@@ -77,16 +82,29 @@ declare module '@theme/DocItem' {
 
   export type Props = {
     readonly route: DocumentRoute;
+    readonly versionMetadata: PropVersionMetadata;
     readonly content: {
       readonly frontMatter: FrontMatter;
       readonly metadata: Metadata;
       readonly toc: readonly TOCItem[];
+      readonly contentTitle: string | undefined;
       (): JSX.Element;
     };
   };
 
   const DocItem: (props: Props) => JSX.Element;
   export default DocItem;
+}
+
+declare module '@theme/DocVersionBanner' {
+  import type {PropVersionMetadata} from '@docusaurus/plugin-content-docs-types';
+
+  export type Props = {
+    readonly versionMetadata: PropVersionMetadata;
+  };
+
+  const DocVersionBanner: (props: Props) => JSX.Element;
+  export default DocVersionBanner;
 }
 
 declare module '@theme/DocPage' {
@@ -99,10 +117,22 @@ declare module '@theme/DocPage' {
     readonly route: {
       readonly path: string;
       readonly component: () => JSX.Element;
-      readonly routes: readonly DocumentRoute[];
+      readonly routes: DocumentRoute[];
     };
   };
 
   const DocPage: (props: Props) => JSX.Element;
   export default DocPage;
+}
+
+declare module '@theme/Seo' {
+  export type Props = {
+    readonly title?: string;
+    readonly description?: string;
+    readonly keywords?: readonly string[] | string;
+    readonly image?: string;
+  };
+
+  const Seo: (props: Props) => JSX.Element;
+  export default Seo;
 }

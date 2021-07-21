@@ -10,20 +10,19 @@ import path, {join} from 'path';
 import chalk from 'chalk';
 import ssrDefaultTemplate from '../client/templates/ssr.html.template';
 import {
-  BUILD_DIR_NAME,
-  CONFIG_FILE_NAME,
+  DEFAULT_BUILD_DIR_NAME,
+  DEFAULT_CONFIG_FILE_NAME,
   GENERATED_FILES_DIR_NAME,
-  THEME_PATH,
 } from '../constants';
 import loadClientModules from './client-modules';
 import loadConfig from './config';
 import {loadPlugins} from './plugins';
 import loadPresets from './presets';
 import loadRoutes from './routes';
-import loadThemeAlias from './themes';
 import {
   DocusaurusConfig,
   DocusaurusSiteMetadata,
+  HtmlTagObject,
   LoadContext,
   PluginConfig,
   Props,
@@ -32,30 +31,55 @@ import {loadHtmlTags} from './html-tags';
 import {getPackageJsonVersion} from './versions';
 import {handleDuplicateRoutes} from './duplicateRoutes';
 import {loadI18n, localizePath} from './i18n';
-import {readCodeTranslationFileContent} from './translations/translations';
+import {
+  readCodeTranslationFileContent,
+  getPluginsDefaultCodeTranslationMessages,
+} from './translations/translations';
 import {mapValues} from 'lodash';
 
-type LoadContextOptions = {
+export type LoadContextOptions = {
   customOutDir?: string;
+  customConfigFilePath?: string;
   locale?: string;
   localizePath?: boolean; // undefined = only non-default locales paths are localized
 };
+
+export async function loadSiteConfig({
+  siteDir,
+  customConfigFilePath,
+}: {
+  siteDir: string;
+  customConfigFilePath?: string;
+}): Promise<{siteConfig: DocusaurusConfig; siteConfigPath: string}> {
+  const siteConfigPathUnresolved =
+    customConfigFilePath ?? DEFAULT_CONFIG_FILE_NAME;
+
+  const siteConfigPath = path.isAbsolute(siteConfigPathUnresolved)
+    ? siteConfigPathUnresolved
+    : path.resolve(siteDir, siteConfigPathUnresolved);
+
+  const siteConfig = await loadConfig(siteConfigPath);
+  return {siteConfig, siteConfigPath};
+}
 
 export async function loadContext(
   siteDir: string,
   options: LoadContextOptions = {},
 ): Promise<LoadContext> {
-  const {customOutDir, locale} = options;
-  const generatedFilesDir: string = path.resolve(
+  const {customOutDir, locale, customConfigFilePath} = options;
+  const generatedFilesDir = path.isAbsolute(GENERATED_FILES_DIR_NAME)
+    ? GENERATED_FILES_DIR_NAME
+    : path.resolve(siteDir, GENERATED_FILES_DIR_NAME);
+
+  const {siteConfig: initialSiteConfig, siteConfigPath} = await loadSiteConfig({
     siteDir,
-    GENERATED_FILES_DIR_NAME,
-  );
-  const initialSiteConfig: DocusaurusConfig = loadConfig(siteDir);
+    customConfigFilePath,
+  });
   const {ssrTemplate} = initialSiteConfig;
 
   const baseOutDir = customOutDir
     ? path.resolve(customOutDir)
-    : path.resolve(siteDir, BUILD_DIR_NAME);
+    : path.resolve(siteDir, DEFAULT_BUILD_DIR_NAME);
 
   const i18n = await loadI18n(initialSiteConfig, {locale});
 
@@ -90,8 +114,9 @@ export async function loadContext(
     siteDir,
     generatedFilesDir,
     siteConfig,
+    siteConfigPath,
     outDir,
-    baseUrl,
+    baseUrl, // TODO to remove: useless, there's already siteConfig.baseUrl! (and yes, it's the same value, cf code above)
     i18n,
     ssrTemplate,
     codeTranslations,
@@ -119,6 +144,7 @@ export async function load(
   const {
     generatedFilesDir,
     siteConfig,
+    siteConfigPath,
     outDir,
     baseUrl,
     i18n,
@@ -146,17 +172,9 @@ export async function load(
   // We want the generated config to have been normalized by the plugins!
   const genSiteConfig = generate(
     generatedFilesDir,
-    CONFIG_FILE_NAME,
+    DEFAULT_CONFIG_FILE_NAME,
     `export default ${JSON.stringify(siteConfig, null, 2)};`,
   );
-
-  // Themes.
-  const fallbackTheme = path.resolve(__dirname, '../client/theme-fallback');
-  const pluginThemes: string[] = plugins
-    .map((plugin) => plugin.getThemePath && plugin.getThemePath())
-    .filter((x): x is string => Boolean(x));
-  const userTheme = path.resolve(siteDir, THEME_PATH);
-  const alias = loadThemeAlias([fallbackTheme, ...pluginThemes], [userTheme]);
 
   // Make a fake plugin to:
   // - Resolve aliased theme components
@@ -168,38 +186,33 @@ export async function load(
   } = siteConfig;
   plugins.push({
     name: 'docusaurus-bootstrap-plugin',
+    content: null,
     options: {},
     version: {type: 'synthetic'},
     getClientModules() {
       return siteConfigClientModules;
     },
-    configureWebpack: () => ({
-      resolve: {
-        alias,
-      },
-    }),
     injectHtmlTags: () => {
       const stylesheetsTags = stylesheets.map((source) =>
         typeof source === 'string'
           ? `<link rel="stylesheet" href="${source}">`
-          : {
+          : ({
               tagName: 'link',
               attributes: {
                 rel: 'stylesheet',
                 ...source,
               },
-            },
+            } as HtmlTagObject),
       );
       const scriptsTags = scripts.map((source) =>
         typeof source === 'string'
-          ? `<script type="text/javascript" src="${source}"></script>`
-          : {
+          ? `<script src="${source}"></script>`
+          : ({
               tagName: 'script',
               attributes: {
-                type: 'text/javascript',
                 ...source,
               },
-            },
+            } as HtmlTagObject),
       );
       return {
         headTags: [...stylesheetsTags, ...scriptsTags],
@@ -267,10 +280,15 @@ ${Object.keys(registry)
     JSON.stringify(i18n, null, 2),
   );
 
+  const codeTranslationsWithFallbacks: Record<string, string> = {
+    ...(await getPluginsDefaultCodeTranslationMessages(plugins)),
+    ...codeTranslations,
+  };
+
   const genCodeTranslations = generate(
     generatedFilesDir,
     'codeTranslations.json',
-    JSON.stringify(codeTranslations, null, 2),
+    JSON.stringify(codeTranslationsWithFallbacks, null, 2),
   );
 
   // Version metadata.
@@ -307,6 +325,8 @@ ${Object.keys(registry)
 
   const props: Props = {
     siteConfig,
+    siteConfigPath,
+    siteMetadata,
     siteDir,
     outDir,
     baseUrl,
@@ -341,7 +361,7 @@ function checkDocusaurusPackagesVersion(siteMetadata: DocusaurusSiteMetadata) {
         // It still could work with different versions
         console.warn(
           chalk.red(
-            `Bad ${plugin} version ${versionInfo.version}.\nAll official @docusaurus/* packages should have the exact same version as @docusaurus/core (${docusaurusVersion}).\nMaybe you want to check, or regenerate your yarn.lock or package-lock.json file?`,
+            `Invalid ${plugin} version ${versionInfo.version}.\nAll official @docusaurus/* packages should have the exact same version as @docusaurus/core (${docusaurusVersion}).\nMaybe you want to check, or regenerate your yarn.lock or package-lock.json file?`,
           ),
         );
       }

@@ -7,11 +7,9 @@
 
 import React from 'react';
 import clsx from 'clsx';
-import type {TOCProps} from '@theme/TOC';
+import type {TOCInlineProps} from '@theme/TOCInline';
 import styles from './styles.module.css';
 import {TOCItem} from '@docusaurus/types';
-
-const LINK_CLASS_NAME = styles['table-of-contents__link--inline'];
 
 /* eslint-disable jsx-a11y/control-has-associated-label */
 function HeadingsInline({
@@ -30,7 +28,6 @@ function HeadingsInline({
         <li key={heading.id}>
           <a
             href={`#${heading.id}`}
-            className={LINK_CLASS_NAME}
             // Developer provided the HTML, so assume it's safe.
             // eslint-disable-next-line react/no-danger
             dangerouslySetInnerHTML={{__html: heading.value}}
@@ -42,7 +39,7 @@ function HeadingsInline({
   );
 }
 
-function TOCInline({toc}: TOCProps): JSX.Element {
+function TOCInline({toc}: TOCInlineProps): JSX.Element {
   return (
     <div className={clsx(styles.tableOfContentsInline)}>
       <HeadingsInline toc={toc} />

@@ -5,8 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-const Joi = require('joi');
-const {URISchema} = require('@docusaurus/utils-validation');
+const {Joi, URISchema} = require('@docusaurus/utils-validation');
 
 const DEFAULT_DOCS_CONFIG = {
   versionPersistence: 'localStorage',
@@ -41,6 +40,7 @@ const DEFAULT_CONFIG = {
     items: [],
   },
   hideableSidebar: false,
+  sidebarCollapsible: true,
 };
 exports.DEFAULT_CONFIG = DEFAULT_CONFIG;
 
@@ -51,7 +51,7 @@ const BaseNavbarItemSchema = Joi.object({
   href: URISchema,
   label: Joi.string(),
   className: Joi.string(),
-  prependBaseUrlToHref: Joi.string(),
+  prependBaseUrlToHref: Joi.bool(),
 })
   // We allow any unknown attributes on the links
   // (users may need additional attributes like target, aria-role, data-customAttribute...)
@@ -107,6 +107,11 @@ const LocaleDropdownNavbarItemSchema = Joi.object({
   className: Joi.string(),
 });
 
+const SearchItemSchema = Joi.object({
+  type: Joi.string().equal('search').required(),
+  position: NavbarItemPosition,
+});
+
 // Can this be made easier? :/
 const isOfType = (type) => {
   let typeSchema = Joi.string().required();
@@ -138,6 +143,10 @@ const NavbarItemSchema = Joi.object().when({
     {
       is: isOfType('localeDropdown'),
       then: LocaleDropdownNavbarItemSchema,
+    },
+    {
+      is: isOfType('search'),
+      then: SearchItemSchema,
     },
     {
       is: isOfType(undefined),
@@ -242,8 +251,8 @@ const ThemeConfigSchema = Joi.object({
   announcementBar: Joi.object({
     id: Joi.string().default('announcement-bar'),
     content: Joi.string(),
-    backgroundColor: Joi.string().default('#fff'),
-    textColor: Joi.string().default('#000'),
+    backgroundColor: Joi.string(),
+    textColor: Joi.string(),
     isCloseable: Joi.bool().default(true),
   }).optional(),
   navbar: Joi.object({
@@ -278,7 +287,7 @@ const ThemeConfigSchema = Joi.object({
     links: Joi.array()
       .items(
         Joi.object({
-          title: Joi.string(),
+          title: Joi.string().allow(null),
           items: Joi.array().items(FooterLinkItemSchema).default([]),
         }),
       )
@@ -301,6 +310,7 @@ const ThemeConfigSchema = Joi.object({
     .default(DEFAULT_CONFIG.prism)
     .unknown(),
   hideableSidebar: Joi.bool().default(DEFAULT_CONFIG.hideableSidebar),
+  sidebarCollapsible: Joi.bool().default(DEFAULT_CONFIG.sidebarCollapsible),
 });
 exports.ThemeConfigSchema = ThemeConfigSchema;
 
